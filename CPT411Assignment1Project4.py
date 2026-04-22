@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 
 # --- DFA State Constants ---
 BOUNDARY = 0    # q0: at a word boundary (start of text or after a non-alpha character)
@@ -66,18 +67,38 @@ def run_dfa(text, patterns):
     return matches
 
 
-def print_results(text, results):
-    #Print accept/reject status, occurrence count, and positions for each pattern.
-    print("\n--- Results ---")
+def format_results(results):
+    lines = ["--- Results ---"]
+    found_any = False
+
     for pattern, positions in results.items():
         if positions:
-            print(f"Pattern '{pattern}': ACCEPTED – {len(positions)} occurrence(s) at position(s) {positions}")
+            found_any = True
+            lines.append(
+                f"Pattern '{pattern}': ACCEPTED - {len(positions)} occurrence(s) at position(s) {positions}"
+            )
+
+    if not found_any:
+        lines.append("No matching patterns found.")
+
+    return "\n".join(lines)
 
 
-def print_highlighted(text, results, patterns):
-    BOLD = '\033[1m'
-    END  = '\033[0m'
+def to_plaintext_bold(text):
+    bold_chars = []
+    for ch in text:
+        if 'A' <= ch <= 'Z':
+            bold_chars.append(chr(0x1D5D4 + ord(ch) - ord('A')))
+        elif 'a' <= ch <= 'z':
+            bold_chars.append(chr(0x1D5EE + ord(ch) - ord('a')))
+        elif '0' <= ch <= '9':
+            bold_chars.append(chr(0x1D7EC + ord(ch) - ord('0')))
+        else:
+            bold_chars.append(ch)
+    return "".join(bold_chars)
 
+
+def format_highlighted(text, results, patterns):
     # Collect all match spans and sort by position
     spans = []
     for p in patterns:
@@ -90,12 +111,41 @@ def print_highlighted(text, results, patterns):
     for pos, length in spans:
         if pos >= prev_end:  # skip overlapping matches
             highlighted += text[prev_end:pos]
-            highlighted += f"{BOLD}{text[pos:pos + length]}{END}"
+            highlighted += to_plaintext_bold(text[pos:pos + length])
             prev_end = pos + length
     highlighted += text[prev_end:]
 
-    print("\n--- Highlighted Text ---")
-    print(highlighted)
+    return highlighted
+
+
+def write_output_file(text, results, patterns):
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"output{timestamp}.txt"
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    output_path = os.path.join(script_dir, filename)
+
+    sections = [
+        "--- Text Used for Demo ---",
+        text,
+        "",
+        format_results(results),
+        "",
+        "--- Highlighted Text ---",
+        format_highlighted(text, results, patterns),
+        "",
+    ]
+
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write("\n".join(sections))
+
+    return output_path
+
+
+def open_output_file(filepath):
+    try:
+        os.startfile(filepath)
+    except Exception as e:
+        print(f"Could not auto-open file: {e}")
 
 
 # ─── Main ──────────────────────────────────────────────────────────────────────
@@ -166,10 +216,8 @@ if __name__ == "__main__":
     # Read text and run DFA
     text = read_file("sample.txt")
 
-    print("--- Text Used for Demo ---")
-    print(text)
-
     results = run_dfa(text, patterns)
 
-    print_results(text, results)
-    print_highlighted(text, results, patterns)
+    output_path = write_output_file(text, results, patterns)
+    print(f"Output written to: {output_path}")
+    open_output_file(output_path)
